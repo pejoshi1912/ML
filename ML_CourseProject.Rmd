@@ -108,29 +108,57 @@ Only 25 predictors are created by PCA prediction. Transforming test features bas
 #creating new test features based on principal components
 testPCASet <- predict(prePr, testData[,-lastCol])
 ```
+We first see with basic decision model when cross validation is not used what is the accuracy
+```{r}
+set.seed(10)
+baseFit <- train(classe ~.,data=trainPCASet, method="rpart")
+#baseFit
+confusionMatrix(baseFit)
+```
+Accuracy is around *40%* 
 
-Because we have total 5 classes so we have to select a multiclass model. We'll go with decision tree. We will train our model with a repeated cross validation scheme. 10 partitions (folds) will be created 3 times. The parameters will be fine tuned 25 times. Model with optimal Kappa value will be selected every time.   
+Because we have total 5 classes so we have to select a multiclass model. We'll go with decision tree. We will train our model with a repeated cross validation scheme. 10 partitions (folds) will be created 3 times. The parameters will be fine tuned 10 times. Model with optimal Kappa value will be selected every time.   
+
+
 ```{r}
 #
+set.seed(10)
 fit <- train(classe ~.,data=trainPCASet, method="rpart",
              trControl=trainControl(method="repeatedcv",
                                     number=10,
-                                    repeats=5),
+                                    repeats=3),
              metric="Kappa",
-             tuneLength =25) 
-fit
+             tuneLength =10) 
+#fit
+
+confusionMatrix(fit)
 ```
+With cross validation the accuracy has improved to *50%.*
+
+How the accuracy improves when we use random forest model, let's see
 ```{r}
-library(ipred)
-rpart.plot::prp(fit$finalModel,box.palette="Red",tweak = 1.5)
+set.seed(10)
+rfFit <- train(classe ~.,data=trainPCASet, method="rf",
+             trControl=trainControl(method="repeatedcv",
+                                    number=10,
+                                    repeats = 3
+                                    ),
+             metric="Kappa",
+             tuneLength =10,
+             ntree=10
+             ) 
+#rfFit
+
+confusionMatrix(rfFit)
 ```
+This model gives with same setting over *96% accuracy*
 
 ##Predictions
 
-Using our dicision tree model we will predict classes  for all the test cases.
+Using our random forest model we will predict classes  for all the test cases.
 
 ```{r}
-result <- predict(fit, testPCASet)
+result <- predict(rfFit, testPCASet)
 result
 
 ```
