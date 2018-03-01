@@ -1,0 +1,136 @@
+---
+title: "ML_CourseProject"
+author: "Peeyush"
+date: "February 28, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Loading the data
+
+```{r}
+rm(list=ls())
+trainData <- read.csv("pml-training.csv")
+testData <- read.csv("pml-testing.csv")
+
+```
+
+##Exploratory Data Analysis
+```{r}
+str(trainData)
+```
+
+```{r}
+str(testData)
+```
+
+##Data Creation
+
+```{r}
+dim(trainData)
+dim(testData)
+```
+
+Out of 160 variables starting 7 variables are related to names and times so we remove them from the datasets. Also many variables have NULL values only either in the training set or in test set so they are not useful in model creation so we also remove them all. 
+
+
+```{r}
+#removing time and name variables 
+trainData <- trainData[,-c(1,2,3,4,5,6,7)]
+testData <- testData[ , -c(1,2,3,4,5,6,7)]
+
+#variables that has almost all null values in training set
+trainNull<-vector()
+for(i in 1:ncol(trainData)){
+  if ( any(is.na(trainData[,i]))){
+    trainNull <- append(trainNull,i)
+  }
+}
+
+trainData <- trainData[,-trainNull]
+testData <- testData[ , -trainNull]
+
+#variables that has almost all null values in test set
+testNull<-vector()
+for(i in 1:ncol(testData)){
+  if ( any(is.na(testData[,i]))){
+    testNull <- append(testNull,i)
+  }
+}
+
+trainData <- trainData[,-testNull]
+testData <- testData[ , -testNull]
+
+```
+
+```{r}
+dim(trainData)
+dim(testData)
+
+```
+Still there are 53 variables so it's a good idea to perform PCA to reduce number of variables
+
+```{r}
+library(caret)
+
+set.seed(13234)
+lastCol<- ncol(trainData)
+prePr <- preProcess( x=trainData[,-lastCol], method = "pca")
+prePr
+```
+
+25 PCA components are enough to capture 95% variance. Let's see how much variance is being captured by different principal components
+
+```{r}
+sortedStdIndex<- order(prePr$std,decreasing = TRUE)
+std <- prePr$std[sortedStdIndex]
+var <- std^2
+propVarEx <- var/sum(var)
+#propVarEx
+plot(propVarEx, xlab="Principal Components", ylab="Variance Explained", main="Variance Explained by Principal Components")
+
+```
+
+```{r}
+#creating new training features based on principal components
+trainPCASet<- predict(prePr, trainData[,-lastCol])
+dim(trainPCASet)
+#adding the classe variable in the trainingset
+trainPCASet$classe <- trainData$classe
+```
+Only 25 predictors are created by PCA prediction. Transforming test features based on principal components. 
+
+```{r}
+#creating new test features based on principal components
+testPCASet <- predict(prePr, testData[,-lastCol])
+```
+
+Because we have total 5 classes so we have to select a multiclass model. We'll go with decision tree. We will train our model with a repeated cross validation scheme. 10 partitions (folds) will be created 3 times. The parameters will be fine tuned 25 times. Model with optimal Kappa value will be selected every time.   
+```{r}
+#
+fit <- train(classe ~.,data=trainPCASet, method="rpart",
+             trControl=trainControl(method="repeatedcv",
+                                    number=10,
+                                    repeats=5),
+             metric="Kappa",
+             tuneLength =25) 
+fit
+```
+```{r}
+library(ipred)
+rpart.plot::prp(fit$finalModel,box.palette="Red",tweak = 1.5)
+```
+
+##Predictions
+
+Using our dicision tree model we will predict classes  for all the test cases.
+
+```{r}
+result <- predict(fit, testPCASet)
+result
+
+```
